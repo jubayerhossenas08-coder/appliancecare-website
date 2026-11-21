@@ -1,1 +1,100 @@
 *{box-sizing:border-box}body{margin:0;background:#eef2f5;color:#263445;font:14px/1.5 Inter,system-ui,"Noto Sans Bengali",Arial,sans-serif}.hidden{display:none!important}button{cursor:pointer;border:0;border-radius:6px;padding:10px 14px;font-weight:700}.primary{background:#35c9c6;color:#fff}.wide{width:100%;margin-top:18px;padding:13px}.logo{font-size:22px;font-weight:850;letter-spacing:-.7px;color:#fff}.logo span{color:#48d2cf}.logo small{font-size:12px}.login-wrap{min-height:100vh;display:grid;place-items:center;background:linear-gradient(135deg,#172b3a,#354b5b)}.login-card{width:min(410px,92vw);background:white;padding:34px;border-radius:15px;box-shadow:0 20px 60px #0003}.login-card .logo{color:#263445}.login-card h1{margin:30px 0 2px}.login-card p{color:#718094;margin-top:0}label{display:block;font-weight:700;margin:13px 0 5px}input,select,textarea{font:inherit;border:1px solid #dbe2e9;border-radius:6px;padding:11px;width:100%;background:#fff;color:#263445}input:focus,select:focus,textarea:focus{outline:2px solid #35c9c655;border-color:#35c9c6}.link{background:none;color:#168f91;margin-top:12px;padding-left:0}.msg{margin-top:12px;color:#b33243}#sidebar{width:232px;background:#303e4d;color:#b9c7d3;position:fixed;inset:0 auto 0 0;padding:18px 8px;overflow:auto;transition:.2s;z-index:3}.side-logo{padding:4px 14px 24px}.nav-label{font-size:11px;color:#8092a3;padding:15px 14px 7px}.nav{display:block;width:100%;text-align:left;background:none;color:#b9c7d3;margin:2px 0;padding:12px 14px;font-weight:500}.nav:hover,.nav.active{background:#35c9c6;color:#fff}.nav b{float:right;background:#e45d72;border-radius:20px;padding:1px 7px}.logout{margin-top:25px}main{margin-left:232px;min-height:100vh}header{height:56px;background:#263541;color:white;display:flex;align-items:center;gap:18px;padding:0 22px;position:sticky;top:0;z-index:2}.iconbtn{background:transparent;color:white;font-size:18px}.global-search{display:flex;max-width:520px;flex:1}.global-search select{width:105px;border-radius:5px 0 0 5px}.global-search input{border-radius:0}.global-search button{background:#35c9c6;color:white;border-radius:0 5px 5px 0}.userbox{margin-left:auto;text-align:right}.userbox small{display:block;color:#a8bac7;font-size:10px}.page{padding:25px 20px}.pagehead{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;gap:10px}.pagehead h1{margin:0;font-size:25px}.pagehead p{margin:3px 0;color:#718094}.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}.stat,.panel{background:#fff;border:1px solid #e0e6eb;border-radius:4px}.stat{padding:17px;display:flex;align-items:center;gap:13px}.stat .ico{width:46px;height:46px;display:grid;place-items:center;background:#e6f8f7;color:#179b99;font-size:22px}.stat small{display:block;color:#8a98a6}.stat strong{font-size:24px;font-weight:500}.panels{display:grid;grid-template-columns:1.5fr 1fr;gap:14px}.panel{padding:18px;margin-bottom:16px}.panel h3{margin:0 0 15px;border-bottom:1px solid #edf0f3;padding-bottom:12px}.toolbar{display:flex;gap:10px;margin-bottom:16px}.toolbar input{max-width:360px}.toolbar button{background:#e9eff4}.tablewrap{overflow:auto}table{border-collapse:collapse;width:100%;min-width:650px}th,td{text-align:left;padding:12px 10px;border-bottom:1px solid #edf0f3;font-size:13px}th{color:#83909e;font-size:11px;text-transform:uppercase}.pill{border-radius:20px;padding:4px 9px;font-size:11px;font-weight:700;background:#edf1f5}.Pending{background:#fff2d5;color:#946300}.Processing,.Scheduled{background:#e7efff;color:#3158b4}.Completed,.Active{background:#e1f6ec;color:#18724e}.Cancelled,.Declined{background:#ffeaed;color:#a52d3c}.modal{position:fixed;inset:0;background:#13202bb0;display:grid;place-items:center;z-index:10;padding:15px}.modal-card{background:#fff;border-radius:12px;padding:25px;width:min(620px,96vw);max-height:90vh;overflow:auto;position:relative}.close{position:absolute;right:12px;top:10px;background:#edf1f5;font-size:20px;padding:3px 10px}.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.formgrid .full{grid-column:1/-1}.actions{display:flex;gap:9px;margin-top:17px}.muted{color:#8190a0}.danger{color:#b33243}@media(max-width:900px){#sidebar{transform:translateX(-100%)}#sidebar.open{transform:translateX(0)}main{margin-left:0}.stats{grid-template-columns:repeat(2,1fr)}.panels{grid-template-columns:1fr}}@media(max-width:560px){.page{padding:16px 11px}.stats{grid-template-columns:1fr 1fr;gap:8px}.stat{padding:11px}.stat strong{font-size:20px}.global-search select{display:none}.userbox{font-size:11px}.pagehead{align-items:flex-start;flex-direction:column}.formgrid{grid-template-columns:1fr}.formgrid .full{grid-column:auto}.toolbar{flex-wrap:wrap}.toolbar input{max-width:none}}
+/* Commission summary */
+.commission-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0 0 18px;
+}
+
+.commission-card {
+  background: #fff;
+  border: 1px solid #e0e6eb;
+  border-radius: 6px;
+  padding: 16px;
+}
+
+.commission-card small {
+  display: block;
+  color: #718094;
+  margin-bottom: 6px;
+}
+
+.commission-card strong {
+  display: block;
+  font-size: 21px;
+}
+
+/* Multiple service order */
+.selected-price {
+  margin: 0;
+  background: #f7fbfb;
+}
+
+.selected-price h3 {
+  margin-bottom: 8px;
+}
+
+.selected-service-table {
+  min-width: 500px;
+}
+
+.selected-service-table small {
+  display: block;
+  margin-top: 3px;
+}
+
+.order-totals {
+  background: #f1f7f7;
+  padding: 12px 15px;
+  border-radius: 6px;
+  margin-top: 12px;
+}
+
+.order-totals p {
+  display: flex;
+  justify-content: space-between;
+  margin: 5px 0;
+}
+
+.small-btn {
+  background: #eaf1f4;
+  color: #263445;
+  padding: 7px 10px;
+  margin: 2px;
+  font-size: 12px;
+}
+
+.invoice-btn {
+  background: #e3f5f4;
+  color: #147f7d;
+}
+
+.status-select {
+  min-width: 135px;
+  padding: 7px;
+  font-size: 12px;
+}
+
+.remove-selected-btn {
+  background: #ffeaed;
+  color: #a52d3c;
+  padding: 6px 9px;
+  font-size: 12px;
+}
+
+@media(max-width:700px) {
+  .commission-summary {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .commission-card {
+    padding: 12px;
+  }
+
+  .commission-card strong {
+    font-size: 18px;
+  }
+}
+
