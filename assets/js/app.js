@@ -9,22 +9,20 @@ const firebaseConfig = {
 const API_URL = "https://script.google.com/macros/s/AKfycbyMVuMCUiPBjR0MRH88duGFRLj7ak2IB_1B5nB9FhEeGOxrsnl1Lm9DAfZn4iBnY9MFQQ/exec";
 
 firebase.initializeApp(firebaseConfig);
-
 const auth = firebase.auth();
 
 let me = null;
 let profile = null;
 let orders = [];
 let services = [];
+let selectedServices = [];
 
 const $ = id => document.getElementById(id);
 
 const MASTER_CATEGORIES = {
   "Air Conditioning": [
-    "AC Services",
-    "AC Repair Services",
-    "AC Gas Charge",
-    "AC Combo Services"
+    "AC Services", "AC Repair Services",
+    "AC Gas Charge", "AC Combo Services"
   ],
   "Appliance & Electronics": [
     "Appliance & Home Services",
@@ -41,9 +39,7 @@ const MASTER_CATEGORIES = {
     "Painting & Renovation",
     "Shifting"
   ],
-  "Beauty & Wellness": [
-    "Beauty & Wellness"
-  ],
+  "Beauty & Wellness": ["Beauty & Wellness"],
   "Transport & Vehicle Services": [
     "Driver Service",
     "Tourist Bus Rental",
@@ -52,45 +48,55 @@ const MASTER_CATEGORIES = {
   ]
 };
 
+// ---------- API ----------
+
 function api(params) {
   return new Promise((resolve, reject) => {
     if (!API_URL.startsWith("https://")) {
-      return reject(Error("API URL is not configured"));
+      reject(Error("API URL is not configured."));
+      return;
     }
 
     const callback = "ac_" + Math.random().toString(36).slice(2);
     const script = document.createElement("script");
+    const query = new URLSearchParams({
+      ...params,
+      callback,
+      token: window.__token || ""
+    });
 
-    const timeout = setTimeout(() => {
+    const timer = setTimeout(() => {
       clean();
-      reject(Error("Server timeout"));
-    }, 20000);
+      reject(Error("Server timeout. Please try again."));
+    }, 25000);
 
     function clean() {
-      clearTimeout(timeout);
+      clearTimeout(timer);
       delete window[callback];
       script.remove();
     }
 
     window[callback] = data => {
       clean();
+      if (!data || data.ok !== true) {
+        reject(Error(data?.error || "Server request failed."));
+        return;
+      }
       resolve(data);
     };
 
-    params.callback = callback;
-    params.token = window.__token;
-
-    script.src = API_URL + "?" + new URLSearchParams(params);
-
+    script.src = API_URL + "?" + query.toString();
     script.onerror = () => {
       clean();
-      reject(Error("Backend connection failed"));
+      reject(Error("Backend connection failed."));
     };
 
     document.body.appendChild(script);
   });
 }
 
+// Apps Script POST uses no-cors, so the browser cannot read its response.
+// Refreshing the data afterwards confirms whether the change was saved.
 async function post(payload) {
   payload.token = window.__token;
 
@@ -108,10 +114,19 @@ async function post(payload) {
   });
 }
 
-// Authentication
+async function submitAndRefresh(payload, afterRefresh) {
+  await post(payload);
+  await new Promise(resolve => setTimeout(resolve, 1800));
+  await refreshAll();
+  if (afterRefresh) afterRefresh();
+}
+
+// ---------- Authentication ----------
 
 auth.onAuthStateChanged(async user => {
   if (!user) {
+    me = null;
+    profile = null;
     $("login").classList.remove("hidden");
     $("app").classList.add("hidden");
     return;
@@ -122,14 +137,10 @@ auth.onAuthStateChanged(async user => {
     me = user;
 
     const result = await api({ action: "me" });
-
-    if (!result.ok) throw Error(result.error);
-
     profile = result.profile;
 
     $("login").classList.add("hidden");
     $("app").classList.remove("hidden");
-
     $("userName").textContent = profile.name;
     $("userRole").textContent = profile.role;
 
@@ -138,7 +149,6 @@ auth.onAuthStateChanged(async user => {
     });
 
     await refreshAll();
-
   } catch (error) {
     $("loginMsg").textContent = error.message;
     await auth.signOut();
@@ -147,7 +157,6 @@ auth.onAuthStateChanged(async user => {
 
 $("loginForm").onsubmit = async event => {
   event.preventDefault();
-
   $("loginMsg").textContent = "Signing in...";
 
   try {
@@ -162,7 +171,6 @@ $("loginForm").onsubmit = async event => {
 
 $("forgot").onclick = async () => {
   const email = $("email").value.trim();
-
   if (!email) {
     $("loginMsg").textContent = "Please enter your email address first.";
     return;
@@ -177,21 +185,18 @@ $("forgot").onclick = async () => {
 };
 
 $("logout").onclick = () => auth.signOut();
+$("menu").onclick = () => $("sidebar").classList.toggle("open");
 
-$("menu").onclick = () => {
-  $("sidebar").classList.toggle("open");
-};
-
-// Navigation
+// ---------- Navigation ----------
 
 document.querySelectorAll(".nav[data-page]").forEach(button => {
   button.onclick = () => showPage(button.dataset.page);
 });
 
 function showPage(page) {
-  document.querySelectorAll(".page").forEach(item => {
-    item.classList.add("hidden");
-  });
+  document.querySelectorAll(".page").forEach(item =>
+    item.classList.add("hidden")
+  );
 
   $(page).classList.remove("hidden");
 
@@ -219,10 +224,8 @@ $("globalSearch").onclick = () => {
 
 $("orderFilter").oninput = renderOrders;
 $("statusFilter").onchange = renderOrders;
-
 $("addService").onclick = serviceModal;
 $("addEmployee").onclick = employeeModal;
-
 $("closeModal").onclick = closeM;
 
 function modal(html) {
@@ -234,16 +237,13 @@ function closeM() {
   $("modal").classList.add("hidden");
 }
 
-// Load data
+// ---------- Load data ----------
 
 async function refreshAll() {
   const [orderResult, serviceResult] = await Promise.all([
     api({ action: "list" }),
     api({ action: "services" })
   ]);
-
-  if (!orderResult.ok) throw Error(orderResult.error);
-  if (!serviceResult.ok) throw Error(serviceResult.error);
 
   orders = orderResult.orders || [];
   services = serviceResult.services || [];
@@ -253,19 +253,12 @@ async function refreshAll() {
   renderServices();
 }
 
-// Dashboard
+// ---------- Dashboard ----------
 
 function renderDashboard() {
   const statuses = [
-    "Pending",
-    "Declined",
-    "Not Responded",
-    "Scheduled",
-    "Processing",
-    "Service Due",
-    "Completed",
-    "Active",
-    "Cancelled"
+    "Pending", "Declined", "Not Responded", "Scheduled",
+    "Processing", "Service Due", "Completed", "Active", "Cancelled"
   ];
 
   const icons = ["▤", "⊘", "♧", "◷", "⟳", "◴", "✓", "⊕", "▣"];
@@ -281,81 +274,227 @@ function renderDashboard() {
   `).join("");
 
   $("orderBadge").textContent = orders.length;
-
   $("recent").innerHTML = table(orders.slice(-8).reverse());
 
   $("statusSummary").innerHTML = statuses.map(status => `
-    <p>${status}
+    <p>${esc(status)}
       <b style="float:right">
         ${orders.filter(o => o.status === status).length}
       </b>
     </p>
   `).join("");
+
+  renderCommissionSummary();
 }
 
-// Tables
+function renderCommissionSummary() {
+  let panel = $("commissionSummary");
+
+  if (!panel) {
+    panel = document.createElement("div");
+    panel.id = "commissionSummary";
+    panel.className = "commission-summary";
+    $("stats").insertAdjacentElement("afterend", panel);
+  }
+
+  if (!profile || profile.role !== "ADMIN") {
+    panel.classList.add("hidden");
+    return;
+  }
+
+  panel.classList.remove("hidden");
+
+  const regular = orders.reduce((sum, o) =>
+    sum + (Number(o.regularTotal) || 0), 0);
+  const sp = orders.reduce((sum, o) =>
+    sum + (Number(o.spCommission) || 0), 0);
+  const company = orders.reduce((sum, o) =>
+    sum + (Number(o.applianceCareCommission) || 0), 0);
+
+  panel.innerHTML = `
+    <div class="commission-card">
+      <small>Regular Price Total</small>
+      <strong>${formatPrice(regular)}</strong>
+    </div>
+    <div class="commission-card">
+      <small>SP Commission (70%)</small>
+      <strong>${formatPrice(sp)}</strong>
+    </div>
+    <div class="commission-card">
+      <small>ApplianceCare Commission (30%)</small>
+      <strong>${formatPrice(company)}</strong>
+    </div>
+  `;
+}
+
+// ---------- Tables ----------
 
 function table(rows) {
   if (!rows.length) return "<p class='muted'>No records found.</p>";
 
   return `
-    <table>
-      <thead>
-        <tr>
-          <th>Order ID</th>
-          <th>Customer</th>
-          <th>Phone</th>
-          <th>Service</th>
-          <th>Status</th>
-          <th>PDF</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${rows.map(order => `
+    <div class="tablewrap">
+      <table>
+        <thead>
           <tr>
-            <td><b>${esc(order.id)}</b></td>
-            <td>${esc(order.customerName)}</td>
-            <td>${esc(order.phone)}</td>
-            <td>${esc(order.service)}</td>
-            <td>
-              <span class="pill ${esc(order.status)}">
-                ${esc(order.status)}
-              </span>
-            </td>
-            <td>
-              ${order.pdfUrl
-                ? `<a target="_blank" href="${esc(order.pdfUrl)}">PDF</a>`
-                : "—"}
-            </td>
+            <th>Order ID</th>
+            <th>Customer</th>
+            <th>Phone</th>
+            <th>Service</th>
+            <th>Status</th>
+            <th>PDF</th>
           </tr>
-        `).join("")}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          ${rows.map(order => `
+            <tr>
+              <td><b>${esc(order.id)}</b></td>
+              <td>${esc(order.customerName)}</td>
+              <td>${esc(order.phone)}</td>
+              <td>${esc(order.service)}</td>
+              <td><span class="pill ${statusClass(order.status)}">
+                ${esc(order.status)}
+              </span></td>
+              <td>${order.pdfUrl
+                ? `<a target="_blank" rel="noopener" href="${esc(order.pdfUrl)}">PDF</a>`
+                : "—"}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
   `;
 }
 
+function statusClass(status) {
+  return String(status || "").replace(/[^a-zA-Z]/g, "");
+}
+
 function renderOrders() {
-  const query = ($("orderFilter")?.value || "").toLowerCase();
+  const query = ($("orderFilter")?.value || "").trim().toLowerCase();
   const status = $("statusFilter")?.value || "";
 
   const filtered = orders.filter(order =>
     (!status || order.status === status) &&
     [
-      order.id,
-      order.customerName,
-      order.phone,
-      order.service
-    ].some(value => String(value).toLowerCase().includes(query))
+      order.id, order.customerName, order.phone,
+      order.service, order.location
+    ].some(value => String(value || "").toLowerCase().includes(query))
   );
 
-  $("ordersTable").innerHTML = table(filtered);
+  if (!filtered.length) {
+    $("ordersTable").innerHTML = "<p class='muted'>No orders found.</p>";
+    return;
+  }
+
+  $("ordersTable").innerHTML = `
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Order ID</th>
+            <th>Customer</th>
+            <th>Phone</th>
+            <th>Services</th>
+            <th>Regular Total</th>
+            <th>Payable Total</th>
+            <th>Status</th>
+            <th>Invoice</th>
+            <th>Update</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filtered.map((order, index) => `
+            <tr>
+              <td><b>${esc(order.id)}</b></td>
+              <td>${esc(order.customerName)}</td>
+              <td>${esc(order.phone)}</td>
+              <td>${esc(order.service)}</td>
+              <td>${formatPrice(order.regularTotal)}</td>
+              <td><b>${formatPrice(order.discountTotal)}</b></td>
+              <td>
+                <select class="status-select" data-status-index="${index}">
+                  ${statusOptions(order.status)}
+                </select>
+              </td>
+              <td>
+                <button class="small-btn invoice-btn"
+                  data-invoice-id="${esc(order.id)}">PDF</button>
+              </td>
+              <td>
+                <button class="small-btn update-status-btn"
+                  data-status-index="${index}">Save</button>
+              </td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  $("ordersTable").querySelectorAll(".update-status-btn").forEach(button => {
+    button.onclick = async () => {
+      const index = Number(button.dataset.statusIndex);
+      const order = filtered[index];
+      const select = $("ordersTable").querySelector(
+        `[data-status-index="${index}"].status-select`
+      );
+      if (!order || !select) return;
+
+      button.disabled = true;
+      button.textContent = "Saving...";
+
+      try {
+        await post({
+          action: "updateStatus",
+          id: order.id,
+          status: select.value
+        });
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        await refreshAll();
+      } catch (error) {
+        alert(error.message);
+      } finally {
+        button.disabled = false;
+        button.textContent = "Save";
+      }
+    };
+  });
+
+  $("ordersTable").querySelectorAll(".invoice-btn").forEach(button => {
+    button.onclick = () => generateInvoice(button.dataset.invoiceId);
+  });
+}
+
+function statusOptions(current) {
+  return [
+    "Pending", "Declined", "Not Responded", "Scheduled",
+    "Processing", "Service Due", "Completed", "Active", "Cancelled"
+  ].map(status => `
+    <option value="${status}" ${status === current ? "selected" : ""}>
+      ${status}
+    </option>
+  `).join("");
+}
+
+async function generateInvoice(id) {
+  try {
+    const result = await api({ action: "invoice", id });
+    if (result.pdfUrl) {
+      window.open(result.pdfUrl, "_blank", "noopener");
+      await refreshAll();
+    } else {
+      alert("Invoice could not be generated.");
+    }
+  } catch (error) {
+    alert("Invoice error: " + error.message);
+  }
 }
 
 function renderCustomers() {
   const map = {};
-
   orders.forEach(order => {
-    map[order.phone] = order;
+    if (order.phone) map[order.phone] = order;
   });
 
   const customers = Object.values(map).map(order => ({
@@ -370,16 +509,10 @@ function renderCustomers() {
   $("customersTable").innerHTML = table(customers);
 }
 
-// Service helpers
+// ---------- Service helpers ----------
 
 function getSubCategories(master) {
   return MASTER_CATEGORIES[master] || [];
-}
-
-function getMasterCategory(category) {
-  return Object.keys(MASTER_CATEGORIES).find(master =>
-    MASTER_CATEGORIES[master].includes(category)
-  ) || "";
 }
 
 function formatPrice(value) {
@@ -389,49 +522,14 @@ function formatPrice(value) {
 
 function servicePriceText(service) {
   if (!service) return "";
-
   return `
     <p>Discount Price: <b>${formatPrice(service.discountPrice)}</b></p>
     <p>Regular Price: <b>${formatPrice(service.regularPrice)}</b></p>
   `;
 }
 
-// Service management
-
-function renderServices() {
-  $("servicesTable").innerHTML = `
-    <table>
-      <thead>
-        <tr>
-          <th>Category</th>
-          <th>Service Name</th>
-          <th>Discount Price</th>
-          <th>Regular Price</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${services.map((service, index) => `
-          <tr>
-            <td>${esc(service.category)}</td>
-            <td>${esc(service.name)}</td>
-            <td>${formatPrice(service.discountPrice)}</td>
-            <td>${formatPrice(service.regularPrice)}</td>
-            <td>
-              <button onclick="editService(${index})">Edit</button>
-              <button onclick="removeService('${esc(service.name)}')">Remove</button>
-            </td>
-          </tr>
-        `).join("")}
-      </tbody>
-    </table>
-  `;
-}
-
 function categoryOptions(selected = "") {
-  const categories = Object.values(MASTER_CATEGORIES).flat();
-
-  return categories.map(category => `
+  return Object.values(MASTER_CATEGORIES).flat().map(category => `
     <option value="${esc(category)}"
       ${category === selected ? "selected" : ""}>
       ${esc(category)}
@@ -439,10 +537,58 @@ function categoryOptions(selected = "") {
   `).join("");
 }
 
+// ---------- Service management ----------
+
+function renderServices() {
+  if (!$("servicesTable")) return;
+
+  $("servicesTable").innerHTML = `
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Service Name</th>
+            <th>Discount Price</th>
+            <th>Regular Price</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${services.map((service, index) => `
+            <tr>
+              <td>${esc(service.category)}</td>
+              <td>${esc(service.name)}</td>
+              <td>${formatPrice(service.discountPrice)}</td>
+              <td>${formatPrice(service.regularPrice)}</td>
+              <td>
+                <button class="small-btn edit-service-btn"
+                  data-service-index="${index}">Edit</button>
+                <button class="small-btn remove-service-btn"
+                  data-service-index="${index}">Remove</button>
+              </td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  $("servicesTable").querySelectorAll(".edit-service-btn").forEach(button => {
+    button.onclick = () => editService(Number(button.dataset.serviceIndex));
+  });
+
+  $("servicesTable").querySelectorAll(".remove-service-btn").forEach(button => {
+    button.onclick = () => {
+      const service = services[Number(button.dataset.serviceIndex)];
+      if (service) removeService(service.name, service.category);
+    };
+  });
+}
+
 function serviceModal() {
   modal(`
     <h2>Add Service</h2>
-
     <div class="formgrid">
       <div class="full">
         <label>Sub Category</label>
@@ -451,28 +597,26 @@ function serviceModal() {
           ${categoryOptions()}
         </select>
       </div>
-
       <div class="full">
         <label>Service Name</label>
         <input id="serviceName" placeholder="Enter service name">
       </div>
-
       <div>
         <label>Discount Price</label>
         <input id="serviceDiscount" type="number" min="0">
       </div>
-
       <div>
         <label>Regular Price</label>
         <input id="serviceRegular" type="number" min="0">
       </div>
     </div>
-
     <div class="actions">
-      <button class="primary" onclick="saveService()">Save Service</button>
+      <button class="primary" id="saveServiceBtn">Save Service</button>
       <button onclick="closeM()">Cancel</button>
     </div>
   `);
+
+  $("saveServiceBtn").onclick = saveService;
 }
 
 function editService(index) {
@@ -481,7 +625,6 @@ function editService(index) {
 
   modal(`
     <h2>Edit Service</h2>
-
     <div class="formgrid">
       <div class="full">
         <label>Sub Category</label>
@@ -489,32 +632,29 @@ function editService(index) {
           ${categoryOptions(service.category)}
         </select>
       </div>
-
       <div class="full">
         <label>Service Name</label>
         <input id="serviceName" value="${esc(service.name)}" disabled>
       </div>
-
       <div>
         <label>Discount Price</label>
         <input id="serviceDiscount" type="number" min="0"
           value="${service.discountPrice ?? ""}">
       </div>
-
       <div>
         <label>Regular Price</label>
         <input id="serviceRegular" type="number" min="0"
           value="${service.regularPrice ?? ""}">
       </div>
     </div>
-
     <div class="actions">
-      <button class="primary" onclick="updateServicePrice('${esc(service.name)}')">
-        Update Service
-      </button>
+      <button class="primary" id="updateServiceBtn">Update Service</button>
       <button onclick="closeM()">Cancel</button>
     </div>
   `);
+
+  $("updateServiceBtn").onclick = () =>
+    updateServicePrice(service.name, service.category);
 }
 
 async function saveService() {
@@ -526,66 +666,69 @@ async function saveService() {
     return;
   }
 
-  await post({
-    action: "addService",
-    category,
-    name,
-    discountPrice: $("serviceDiscount").value,
-    regularPrice: $("serviceRegular").value
-  });
-
-  closeM();
-  alert("Service save request sent.");
-  setTimeout(refreshAll, 3000);
-}
-
-async function updateServicePrice(name) {
-  await post({
-    action: "updateService",
-    name,
-    category: $("serviceCategory").value,
-    discountPrice: $("serviceDiscount").value,
-    regularPrice: $("serviceRegular").value
-  });
-
-  closeM();
-  alert("Service update request sent.");
-  setTimeout(refreshAll, 3000);
-}
-
-async function removeService(name) {
-  if (!confirm("Are you sure you want to deactivate this service?")) {
-    return;
+  try {
+    await submitAndRefresh({
+      action: "addService",
+      category,
+      name,
+      discountPrice: $("serviceDiscount").value,
+      regularPrice: $("serviceRegular").value
+    });
+    closeM();
+    alert("Service request submitted. Please check the Services list.");
+  } catch (error) {
+    alert(error.message);
   }
-
-  await post({
-    action: "removeService",
-    name
-  });
-
-  setTimeout(refreshAll, 3000);
 }
 
-// Three-level searchable service selection
+async function updateServicePrice(name, oldCategory) {
+  try {
+    await submitAndRefresh({
+      action: "updateService",
+      name,
+      oldCategory,
+      category: $("serviceCategory").value,
+      discountPrice: $("serviceDiscount").value,
+      regularPrice: $("serviceRegular").value
+    });
+    closeM();
+    alert("Service update request submitted.");
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+async function removeService(name, category) {
+  if (!confirm("Are you sure you want to deactivate this service?")) return;
+
+  try {
+    await submitAndRefresh({
+      action: "removeService",
+      name,
+      category
+    });
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+// ---------- Multiple-service order form ----------
 
 function orderModal() {
+  selectedServices = [];
   const masters = Object.keys(MASTER_CATEGORIES);
 
   modal(`
     <h2>New Order</h2>
-
     <div class="formgrid">
-
       <div>
         <label>Customer Name *</label>
         <input id="f_name" required>
       </div>
-
       <div>
         <label>Phone Number *</label>
         <input id="f_phone" required>
       </div>
-
       <div class="full">
         <label>Location *</label>
         <input id="f_location" required>
@@ -610,26 +753,35 @@ function orderModal() {
 
       <div class="full">
         <label>3. Search Service Name *</label>
-        <input id="f_service"
-          list="serviceSuggestions"
+        <input id="f_service" list="serviceSuggestions"
           placeholder="Type service name to search..."
-          autocomplete="off"
-          disabled>
+          autocomplete="off" disabled>
         <datalist id="serviceSuggestions"></datalist>
       </div>
 
       <div class="full" id="selectedServicePrice"></div>
 
       <div class="full">
+        <button type="button" id="addSelectedService" class="primary">
+          + Add This Service
+        </button>
+      </div>
+
+      <div class="full">
+        <h3>Selected Services</h3>
+        <div id="selectedServicesList">
+          <p class="muted">No services added yet.</p>
+        </div>
+      </div>
+
+      <div class="full">
         <label>Order Details</label>
         <textarea id="f_details"></textarea>
       </div>
-
       <div class="full">
         <label>Additional Comments</label>
         <textarea id="f_comments"></textarea>
       </div>
-
     </div>
 
     <div class="actions">
@@ -642,13 +794,12 @@ function orderModal() {
   $("f_sub").onchange = updateServiceSuggestions;
   $("f_service").oninput = showSelectedServicePrice;
   $("f_service").onchange = showSelectedServicePrice;
-
+  $("addSelectedService").onclick = addSelectedService;
   $("confirmOrder").onclick = saveOrder;
 }
 
 function updateSubCategories() {
-  const master = $("f_master").value;
-  const categories = getSubCategories(master);
+  const categories = MASTER_CATEGORIES[$("f_master").value] || [];
 
   $("f_sub").innerHTML = `
     <option value="">Select Sub Category</option>
@@ -666,7 +817,6 @@ function updateSubCategories() {
 
 function updateServiceSuggestions() {
   const category = $("f_sub").value;
-
   $("f_service").value = "";
   $("selectedServicePrice").innerHTML = "";
 
@@ -681,14 +831,18 @@ function updateServiceSuggestions() {
   $("f_service").disabled = !category;
 }
 
-function showSelectedServicePrice() {
+function getCurrentSelectedService() {
   const category = $("f_sub").value;
   const name = $("f_service").value.trim();
 
-  const selected = services.find(service =>
+  return services.find(service =>
     service.category === category &&
     service.name.toLowerCase() === name.toLowerCase()
   );
+}
+
+function showSelectedServicePrice() {
+  const selected = getCurrentSelectedService();
 
   if (!selected) {
     $("selectedServicePrice").innerHTML = "";
@@ -696,75 +850,169 @@ function showSelectedServicePrice() {
   }
 
   $("selectedServicePrice").innerHTML = `
-    <div class="panel">
+    <div class="panel selected-price">
       <h3>${esc(selected.name)}</h3>
       ${servicePriceText(selected)}
     </div>
   `;
 }
 
-// Create order
+function addSelectedService() {
+  const service = getCurrentSelectedService();
 
-async function saveOrder() {
-  const category = $("f_sub").value;
-  const name = $("f_service").value.trim();
-
-  const selected = services.find(service =>
-    service.category === category &&
-    service.name.toLowerCase() === name.toLowerCase()
-  );
-
-  const payload = {
-    action: "create",
-    customerName: $("f_name").value.trim(),
-    phone: $("f_phone").value.trim(),
-    location: $("f_location").value.trim(),
-    service: selected ? selected.name : "",
-    details: $("f_details").value,
-    comments: $("f_comments").value
-  };
-
-  if (
-    !payload.customerName ||
-    !payload.phone ||
-    !payload.location ||
-    !selected
-  ) {
-    alert("Please complete all required fields and select a valid service.");
+  if (!service) {
+    alert("Please select a valid service from the suggestions.");
     return;
   }
 
-  await post(payload);
+  const exists = selectedServices.some(item =>
+    item.category === service.category && item.name === service.name
+  );
 
-  closeM();
+  if (exists) {
+    alert("This service has already been added.");
+    return;
+  }
 
-  alert("Order request sent. Refresh the Orders page shortly.");
+  const regularPrice = Number(service.regularPrice) || 0;
+  const hasDiscount =
+    service.discountPrice !== "" && service.discountPrice != null;
+  const discountPrice = hasDiscount
+    ? Number(service.discountPrice)
+    : null;
 
-  setTimeout(refreshAll, 3500);
+  selectedServices.push({
+    category: service.category,
+    name: service.name,
+    regularPrice,
+    discountPrice,
+    payablePrice: hasDiscount ? discountPrice : regularPrice
+  });
+
+  renderSelectedServices();
+  $("f_service").value = "";
+  $("selectedServicePrice").innerHTML = "";
 }
 
-// Employee management
+function renderSelectedServices() {
+  if (!selectedServices.length) {
+    $("selectedServicesList").innerHTML =
+      "<p class='muted'>No services added yet.</p>";
+    return;
+  }
+
+  const regular = selectedServices.reduce((sum, s) =>
+    sum + s.regularPrice, 0);
+  const payable = selectedServices.reduce((sum, s) =>
+    sum + s.payablePrice, 0);
+
+  $("selectedServicesList").innerHTML = `
+    <div class="tablewrap">
+      <table class="selected-service-table">
+        <thead>
+          <tr>
+            <th>Service</th>
+            <th>Regular</th>
+            <th>Payable</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${selectedServices.map((service, index) => `
+            <tr>
+              <td>
+                <b>${esc(service.name)}</b>
+                <small class="muted">${esc(service.category)}</small>
+              </td>
+              <td>${formatPrice(service.regularPrice)}</td>
+              <td>${formatPrice(service.payablePrice)}</td>
+              <td>
+                <button type="button" class="remove-selected-btn"
+                  data-selected-index="${index}">Remove</button>
+              </td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+    <div class="order-totals">
+      <p>Regular Price Total: <b>${formatPrice(regular)}</b></p>
+      <p>Customer Payable Total: <b>${formatPrice(payable)}</b></p>
+    </div>
+  `;
+
+  $("selectedServicesList").querySelectorAll(".remove-selected-btn")
+    .forEach(button => {
+      button.onclick = () => {
+        selectedServices.splice(Number(button.dataset.selectedIndex), 1);
+        renderSelectedServices();
+      };
+    });
+}
+
+async function saveOrder() {
+  const customerName = $("f_name").value.trim();
+  const phone = $("f_phone").value.trim();
+  const location = $("f_location").value.trim();
+
+  if (!customerName || !phone || !location) {
+    alert("Please complete customer name, phone and location.");
+    return;
+  }
+
+  if (!selectedServices.length) {
+    alert("Please add at least one service.");
+    return;
+  }
+
+  const button = $("confirmOrder");
+  button.disabled = true;
+  button.textContent = "Submitting...";
+
+  try {
+    await post({
+      action: "create",
+      customerName,
+      phone,
+      location,
+      services: selectedServices.map(s => ({
+        category: s.category,
+        name: s.name
+      })),
+      details: $("f_details").value,
+      comments: $("f_comments").value
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 1800));
+    await refreshAll();
+    closeM();
+    showPage("orders");
+    alert("Order request submitted. Please verify that it appears in Orders.");
+  } catch (error) {
+    button.disabled = false;
+    button.textContent = "Confirm Order";
+    alert("Order submission failed: " + error.message);
+  }
+}
+
+// ---------- Employee management ----------
 
 function employeeModal() {
   modal(`
     <h2>New Employee</h2>
-
     <div class="formgrid">
       <div>
         <label>Name</label>
         <input id="e_name">
       </div>
-
       <div>
         <label>Email</label>
         <input id="e_email" type="email">
       </div>
-
       <div>
         <label>Temporary Password</label>
         <input id="e_pass" type="password">
       </div>
-
       <div>
         <label>Role</label>
         <select id="e_role">
@@ -773,12 +1021,13 @@ function employeeModal() {
         </select>
       </div>
     </div>
-
     <div class="actions">
-      <button class="primary" onclick="saveEmployee()">Create Account</button>
+      <button class="primary" id="createEmployeeBtn">Create Account</button>
       <button onclick="closeM()">Cancel</button>
     </div>
   `);
+
+  $("createEmployeeBtn").onclick = saveEmployee;
 }
 
 async function saveEmployee() {
@@ -792,28 +1041,22 @@ async function saveEmployee() {
     return;
   }
 
-  await post({
-    action: "createEmployee",
-    name,
-    email,
-    password,
-    role
-  });
-
-  closeM();
-
-  alert("Employee account creation request sent.");
-
-  setTimeout(loadEmployees, 3500);
+  try {
+    await post({
+      action: "createEmployee",
+      name, email, password, role
+    });
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    await loadEmployees();
+    closeM();
+    alert("Employee creation request submitted. Verify the employee list.");
+  } catch (error) {
+    alert(error.message);
+  }
 }
 
 async function loadEmployees() {
   const result = await api({ action: "employees" });
-
-  if (!result.ok) {
-    $("employeesTable").textContent = result.error;
-    return;
-  }
 
   $("employeesTable").innerHTML = table(
     (result.employees || []).map(employee => ({
@@ -830,11 +1073,6 @@ async function loadEmployees() {
 async function loadActivity() {
   const result = await api({ action: "activity" });
 
-  if (!result.ok) {
-    $("activityTable").textContent = result.error;
-    return;
-  }
-
   $("activityTable").innerHTML = table(
     (result.logs || []).map(item => ({
       id: item.date,
@@ -847,7 +1085,7 @@ async function loadActivity() {
   );
 }
 
-// Escape HTML
+// ---------- HTML escaping ----------
 
 function esc(value) {
   return String(value ?? "").replace(/[&<>"']/g, character => ({
