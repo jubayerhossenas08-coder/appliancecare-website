@@ -6,7 +6,7 @@ const firebaseConfig = {
   appId: "1:1053469064664:web:b6ac6914d246bf8aa3c6ad"
 };
 
-const API_URL = "https://script.google.com/macros/s/AKfycbyMVuMCUiPBjR0MRH88duGFRLj7ak2IB_1B5nB9FhEeGOxrsnl1Lm9DAfZn4iBnY9MFQQ/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbz1oA7D3DAFXLeNs9jgvt_IsnYkRqepiXy7rTrv62VLFhPU0R2mYjrHXaPqJdWstpapfg/exec";
 
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
